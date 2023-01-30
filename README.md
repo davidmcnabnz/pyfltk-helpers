@@ -16,7 +16,7 @@ framework. For decades, FLTK has been a popular framework
 choice for GUIs which need to be simple, light on resources,
 easy to learn. Howerver, FLTK does have some downsides.
 
-As a low-level GUI framework, gives the programmer all the
+As a low-level GUI framework, FLTK (and PyFLTK) gives the programmer all the
 responsibility for managing widget sizes and locations. 
 
 The example programs with both FLTK and PyFLTK typically 
@@ -46,6 +46,8 @@ relative
 locations:
 
 ```
+from fltkHelpers.cursor import FLPoint
+
 class MyApp:
 
     def __init__(self):
