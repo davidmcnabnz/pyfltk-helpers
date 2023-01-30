@@ -33,7 +33,7 @@ often, a source of errors.
 
 ## Placement Cursors
 
-The fltkHelpers.cursor module provides classes which act as
+The `fltkHelpers.cursor` module provides classes which act as
 GUI widget placement 'cursors', which allows widgets to be
 placed in their containers at positions which are relative to
 prior widgets. As such, it automatically calculates the required
