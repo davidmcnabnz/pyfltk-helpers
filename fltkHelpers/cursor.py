@@ -3,7 +3,7 @@ fltkHelpers.py - materials to ease PyFLTK GUI development
 """
 import fltk
 
-class FLPoint:
+class FLCursor:
     """
     Utility class for helping with layout of FLTK widgets. Provides a system for
     'relative' rather than 'absolute' placement, so that new widgets can be
@@ -21,8 +21,8 @@ class FLPoint:
         :param spacing: when using this point to place a widget, use this value to
         determine the new 'right of' and 'below' locations of subsequent widgets.
         """
-        if isinstance(x, FLPoint):
-            # if given an FLPoint object, just harvest its values
+        if isinstance(x, FLCursor):
+            # if given an FLCursor object, just harvest its values
             self.x = x.x
             self.y = x.y
             self.spacing = spacing if spacing is not None else x.spacing
@@ -41,13 +41,13 @@ class FLPoint:
         """
         Subtract from our present position, without spacing.
 
-        :param offset: can be another FLPoint, or a list/tuple. This base class cannot
+        :param offset: can be another FLCursor, or a list/tuple. This base class cannot
         support single-value int, and if given one, will raise a TypeError
         :return: a new object of the same class with the offset applied
         """
         if isinstance(offset, (list, tuple)):
             return self.__class__(self.x - offset[0], self.y - offset[1])
-        elif isinstance(offset, FLPoint):
+        elif isinstance(offset, FLCursor):
             return self.__class__(self.x - offset.x, self.y - offset.y)
         else:
             raise TypeError("Don't know how to add offset %s" % offset)
@@ -56,13 +56,13 @@ class FLPoint:
         """
         Add to our present position, without spacing.
 
-        :param offset: can be another FLPoint, or a list/tuple. This base class cannot
+        :param offset: can be another FLCursor, or a list/tuple. This base class cannot
         support single-value int, and if given one, will raise a TypeError
         :return: a new object of the same class with the offset applied
         """
         if isinstance(offset, (list, tuple)):
             return self.__class__(self.x + offset[0], self.y + offset[1])
-        elif isinstance(offset, FLPoint):
+        elif isinstance(offset, FLCursor):
             return self.__class__(self.x + offset.x, self.y + offset.y)
         else:
             raise TypeError("Don't know how to add offset %s" % offset)
@@ -112,12 +112,12 @@ class FLPoint:
         def placeWidget(size1, *args1, **kw):
 
             if isinstance(size1, (list, tuple)):
-                size1 = FLPoint(size1)
-            if not isinstance(size1, FLPoint):
-                raise TypeError("size should be a FLPoint or tuple/list, got %s" % str(size1))
+                size1 = FLCursor(size1)
+            if not isinstance(size1, FLCursor):
+                raise TypeError("size should be a FLCursor or tuple/list, got %s" % str(size1))
 
-            rightOf = FLPointRight(self.x + size1.x, self.y, self.spacing) + self.spacing
-            below = FLPointDown(self.x, self.y + size1.y, self.spacing) + self.spacing
+            rightOf = FLCursorRight(self.x + size1.x, self.y, self.spacing) + self.spacing
+            below = FLCursorDown(self.x, self.y + size1.y, self.spacing) + self.spacing
             widObj = widCls(self.x, self.y, size1.x, size1.y, *args1, **kw)
             return widObj, rightOf, below
 
@@ -135,12 +135,12 @@ class FLPoint:
         :return:
         """
         if isinstance(height, (int, float)):
-            height = FLPoint(height)
+            height = FLCursor(height)
         return self.__class__(self.spacing, self.y - height.y - self.spacing)
 
     def bottomCentre(self, size, num):
-        if not isinstance(size, FLPoint):
-            size = FLPoint(size)
+        if not isinstance(size, FLCursor):
+            size = FLCursor(size)
         xOffset = noffset(self.x, num, self.spacing, size.x)
         bottom = self.bottom(size)
         bottom.x = xOffset
@@ -153,8 +153,8 @@ class FLPoint:
         :param num:
         :return:
         """
-        if not isinstance(size, FLPoint):
-            size = FLPoint(size)
+        if not isinstance(size, FLCursor):
+            size = FLCursor(size)
         xOffset = noffset(self.x, num, self.spacing, size.x)
         return self.__class__(xOffset, self.y)
 
@@ -167,7 +167,7 @@ class FLPoint:
         """
         return nsize(self.x, n, self.spacing)
 
-class FLPointRight(FLPoint):
+class FLCursorRight(FLCursor):
     """
     Subclass to allow single int values to be passed and taken as dx for the '+' and '-' overloads
     """
@@ -185,7 +185,7 @@ class FLPointRight(FLPoint):
         else:
             return super().__add__(offset)
 
-class FLPointDown(FLPoint):
+class FLCursorDown(FLCursor):
     """
     Subclass to allow single int values to be passed and taken as dy for the '+' and '-' overloads
     """

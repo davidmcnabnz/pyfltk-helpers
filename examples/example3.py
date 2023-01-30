@@ -32,87 +32,121 @@ except ImportError:
     if HELPERS_PARENT_DIR not in sys.path:
         sys.path.append(HELPERS_PARENT_DIR)
 
-from fltkHelpers.cursor import FLPoint
+from fltkHelpers.cursor import FLCursor
 from fltkHelpers.constants import lookupConstant, lookupEvent
 
-winOrg = FLPoint(100, 50)
-winSize = FLPoint(300, 140)
-btnSize = FLPoint(80, 20)
+winOrg = FLCursor(100, 50)
+winSize = FLCursor(300, 140)
+btnSize = FLCursor(80, 20)
 
-class MyServer:
+class QuitException(Exception):
+    pass
+
+class Server:
 
     def __init__(self, pipe):
         self.pipe = pipe
         pass
 
-    async def arun(self):
-        self.qQuit = asyncio.Queue()
-        self.task_talkToGUI = asyncio.create_task(self.task_talkToGUI())
-        self.task_ticker = asyncio.create_task(self.task_ticker())
-        await self.qQuit.get()
-
-    async def task_talkToGUI(self):
+    async def task_listenToGUI(self):
         self.isRunning = True
         self.threadPool = ThreadPoolExecutor()
         self.loop = asyncio.get_running_loop()
-        print("MyServer: starting")
+        print("Server: starting")
         while self.isRunning:
             item = await self.readFromGUI()
-            if item is None:
-                self.isRunning = False
-                print("MyServer: got None from GUI, so quitting")
-                await self.qQuit.put(None)
-                self.task_ticker.cancel()
+            try:
+                await self.on_msgFromGUI(item)
+            except QuitException:
                 break
-            elif item['input'] == 'quit':
-                # this demonstrates the server telling the GUI to quit
-                print("Got 'quit' from GUI, telling GUI to close")
-                await self.writeToGUI(None)
-                await self.qQuit.put(None)
-                return
 
-            print("MyServer: got %s" % str(item))
-            reply = {'type': 'ack', 'data': item}
-            print("MyServer: replying with %s" % str(reply))
-            await self.writeToGUI(reply)
-            print("MyServer: reply sent")
+    async def on_msgFromGUI(self, item):
+
+        if item is None:
+            self.isRunning = False
+            print("Server: got None from GUI, so quitting")
+            await self.qQuit.put(None)
+            self.task_ticker.cancel()
+            raise QuitException
+
+        elif item['input'] == 'quit':
+            # this demonstrates the server telling the GUI to quit
+            print("Got 'quit' from GUI, telling GUI to close")
+            await self.writeToGUI(None)
+            await self.qQuit.put(None)
+            raise QuitException
+
+        print("Server: got %s" % str(item))
+        reply = {'type': 'ack', 'data': item}
+        print("Server: replying with %s" % str(reply))
+        await self.writeToGUI(reply)
+        print("Server: reply sent")
 
     async def task_ticker(self):
+        """
+        This tiny task is there to show the event loop is still running
+        :return:
+        """
         while self.isRunning:
-            print("task_ticker: event loop is live")
+            print("Server: task_ticker: event loop is live")
             await asyncio.sleep(5)
+        print("Server: task_ticker: finished because isRunning=False")
 
     async def readFromGUI(self):
+        """
+        Receive an object sent by the GUI, by calling the blocking Pipe reader method in a separate thread
+        :return:
+        """
         item = await (self.loop.run_in_executor(self.threadPool, self.pipe.recv))
         return item
 
     async def writeToGUI(self, item):
+        """
+        Send an object to the GUI, by calling the blocking Pipe writer method in a separate thread
+        :return:
+        """
         await (self.loop.run_in_executor(self.threadPool, self.pipe.send, item))
 
-    def run(self):
-        print("MyServer.run: running in async")
+    async def arun(self):
+        self.qQuit = asyncio.Queue()
+        self.task_listenToGUI = asyncio.create_task(self.task_listenToGUI())
+        self.task_ticker = asyncio.create_task(self.task_ticker())
+        await self.qQuit.get()
+
+    @classmethod
+    def run(cls, conn):
+        print("Server.run: creating server instance")
+        inst = cls(conn)
         try:
-            asyncio.run(self.arun())
+            asyncio.run(inst.arun())
+            print("Server.run: server terminated normally")
         except:
             traceback.print_exc()
+            print("Server.run: server crashed")
 
-class MyGUI:
-
+class GUI:
+    """
+    Implement a view-only FLTK GUI, as lean as possible. No
+    model or controller. This sends user events to the Server,
+    and receives display update commands from the Server, via
+    an inter-process Pipe connected between them.
+    """
     def __init__(self, pipe):
-
+        """
+        Set up this GUI
+        :param pipe: an inter-process Pipe
+        """
         self.pipe = pipe
         self.createGUI()
 
     def createGUI(self):
-
-        # origin of window on the screen
-        winOrg = FLPoint(100, 50)
-
-        # size of the window
-        winSize = FLPoint(400, 300)
-
-        # standard size of buttons we wish to place
-        btnSize = FLPoint(80, 20)
+        """
+        Construct the FLTK GUI
+        :return:
+        """
+        winOrg = FLCursor(100, 50)           # origin of window on the screen
+        winSize = FLCursor(400, 300)         # size of the window
+        btnSize = FLCursor(80, 20)           # standard size of buttons we wish to place
 
         # now place the window on the screen
         self.win, right, down = winOrg.Fl_Window(winSize, "example3.py")
@@ -123,10 +157,11 @@ class MyGUI:
 
         # place a write-only field, plus a button
         self.fldIn, right, down = fldOrg.Fl_Input((180, 20), "Input:")
+        self.btnSend, right, _ = right.Fl_Return_Button(btnSize, "Send")
+
         self.fldOutBuf = fltk.Fl_Text_Buffer()
         self.fldOut, right, down = (down + 40).Fl_Text_Display((250, 150), "Output:")
         self.fldOut.buffer(self.fldOutBuf)
-        self.btnSend, right, down = down.Fl_Button(btnSize, "Send")
         self.btnSend.callback(self.on_btnSend)
 
         # get a cursor for adding n widgets of given height to bottom row of window
@@ -198,19 +233,43 @@ class MyGUI:
 #        inst.close()
         print("MyGUI.run(): back from fltk.Fl_run()")
 
+class ProcessPair:
+    """
+    Class to create and run a pair of processes which interact with each other
+    over an inter-process Pipe connection
+    """
+    def __init__(self, parentRunner, childRunner):
+        """
+        Create the ProcessPair object.
+        :param parentRunner: a sync callable function which accepts a single argument, the parent
+        side of the pipe
+        :param childRunner: a sync callable function which accepts a single argument, the child
+        side of the pipe
+        """
+        self.parentRunner = parentRunner
+        self.childRunner = childRunner
+
+    def run(self):
+        """
+        Launch both the parent and child runners, and connect a Pipe between them
+        :return:
+        """
+        # create inter-process pipe
+        parent_conn, child_conn = Pipe()
+
+        # spawn the GUI to run in a separate process and communicate over the pipe
+        print("ProcessPair.run: create and launch child process")
+        p = Process(target=self.childRunner, args=(child_conn,))
+        p.start()
+
+        print("ProcessPair.run: create and run parent in current process")
+        self.parentRunner(parent_conn)
+        print("ProcessPair.run: parent terminated")
+
+
 def main():
-    parent_conn, child_conn = Pipe()
-    p = Process(target=MyGUI.run, args=(child_conn,))
-    p.start()
-
-    print("main: creating MyServer")
-    app = MyServer(parent_conn)
-    print("main: running MyServer instance")
-    app.run()
-    print("main: back from MyServer")
-
-    #p.join()
-
+    procPair = ProcessPair(Server.run, GUI.run)
+    procPair.run()
 
 if __name__ == '__main__':
     main()

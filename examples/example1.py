@@ -19,20 +19,20 @@ except ImportError:
     if HELPERS_PARENT_DIR not in sys.path:
         sys.path.append(HELPERS_PARENT_DIR)
 
-from fltkHelpers.cursor import FLPoint
+from fltkHelpers.cursor import FLCursor
 
 class MyApp:
 
     def __init__(self):
 
         # origin of window on the screen
-        winOrg = FLPoint(100, 50)
+        winOrg = FLCursor(100, 50)
 
         # size of the window
-        winSize = FLPoint(300, 140)
+        winSize = FLCursor(300, 140)
 
         # standard size of buttons we wish to place
-        btnSize = FLPoint(80, 20)
+        btnSize = FLCursor(80, 20)
 
         # now place the window on the screen
         self.win, right, down = winOrg.Fl_Window(winSize, "example1.py")

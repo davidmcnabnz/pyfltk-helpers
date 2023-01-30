@@ -19,24 +19,24 @@ except ImportError:
     if HELPERS_PARENT_DIR not in sys.path:
         sys.path.append(HELPERS_PARENT_DIR)
 
-from fltkHelpers.cursor import FLPoint
+from fltkHelpers.cursor import FLCursor
 from fltkHelpers.constants import lookupConstant, lookupEvent
 
 # origin of window on the screen
-winOrg = FLPoint(100, 50)
+winOrg = FLCursor(100, 50)
 
 # size of the window
-winSize = FLPoint(300, 140)
+winSize = FLCursor(300, 140)
 
 # standard size of buttons we wish to place
-btnSize = FLPoint(80, 20)
+btnSize = FLCursor(80, 20)
 
 class MyWidget(fltk.Fl_Group):
 
     def __init__(self, xpos, ypos, width, height):
 
         super().__init__(xpos, ypos, width, height)
-        orgWid = FLPoint(5, 5)
+        orgWid = FLCursor(5, 5)
         orgTxt = orgWid + (80, 5)
 
         self.outTime, right, down = orgTxt.Fl_Output((180, 20), "Datetime:")
@@ -67,7 +67,7 @@ class MyApp:
         self.win, right, down = winOrg.Fl_Window(winSize, "example2.py")
 
         # add in our custom widget
-        org = FLPoint(FLPoint.defaultSpacing, FLPoint.defaultSpacing, FLPoint.defaultSpacing)
+        org = FLCursor(FLCursor.defaultSpacing, FLCursor.defaultSpacing, FLCursor.defaultSpacing)
 
         self.widMine, right, down = org.add(MyWidget, (270, 60))
 
