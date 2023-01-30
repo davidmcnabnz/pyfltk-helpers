@@ -44,7 +44,6 @@ prior widgets. As such, it automatically calculates the required
 Here is a small demo (extracted from `examples/example1.py`) which shows widgets being placed at 
 relative
 locations:
-
 ```
 from fltkHelpers.cursor import FLPoint
 
@@ -84,10 +83,16 @@ class MyApp:
         self.win.end()
 
     def on_btnUpdate(self, *args):
+        """
+        callback for when user clicks the 'Update' button
+        """
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.outTime.value(now)
 
     def on_btnQuit(self, *args):
+        """
+        callback for when user clicks the 'Quit' button
+        """
         self.win.hide()
 
     def run(self):
@@ -97,4 +102,6 @@ def main():
     app = MyApp()
     app.run()
 
+if __name__ == '__main__':
+    main()
 ```

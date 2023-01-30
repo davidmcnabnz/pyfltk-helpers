@@ -57,10 +57,16 @@ class MyApp:
         self.win.end()
 
     def on_btnUpdate(self, *args):
+        """
+        callback for when user clicks the 'Update' button
+        """
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.outTime.value(now)
 
     def on_btnQuit(self, *args):
+        """
+        callback for when user clicks the 'Quit' button
+        """
         self.win.hide()
 
     def run(self):
