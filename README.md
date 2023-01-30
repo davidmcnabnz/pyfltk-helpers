@@ -45,20 +45,20 @@ Here is a small demo (extracted from `examples/example1.py`) which shows widgets
 relative
 locations:
 ```
-from fltkHelpers.cursor import FLPoint
+from fltkHelpers.cursor import FLCursor
 
 class MyApp:
 
     def __init__(self):
 
         # origin of window on the screen
-        winOrg = FLPoint(100, 50)
+        winOrg = FLCursor(100, 50)
 
         # size of the window
-        winSize = FLPoint(300, 140)
+        winSize = FLCursor(300, 140)
 
         # standard size of buttons we wish to place
-        btnSize = FLPoint(80, 20)
+        btnSize = FLCursor(80, 20)
 
         # now place the window on the screen
         self.win, right, down = winOrg.Fl_Window(winSize, "example1.py")
