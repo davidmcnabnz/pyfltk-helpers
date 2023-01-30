@@ -2,13 +2,16 @@
 """
 example3.py
 
-Splits into 2 processes, with FLTK GUI in one, and an asyncio process in the other,
-and the two processes interacting over inter-process Pipe
+Splits into 2 processes, with FLTK GUI in one, and an asyncio server process in the other,
+and the two processes interacting over a full duplex inter-process Pipe
 
-This overcomes the issue of FLTK hogging the GIL and blocking asyncio event loops.
+This makes PyFLTK usable with asyncio, since it overcomes the issue of FLTK hogging the GIL
+and blocking asyncio event loops.
+
 By running the GUI and the asyncio-based server in separate processes, talking over the Pipe,
 FLTK no longer interferes with any event loops. The GUI passes user events to the server, and
-the server passes events to the GUI.
+the server passes events to the GUI. In this, the GUI is a lightweight view-only implementation,
+sending events to the server, and receiving display update instructions from the server.
 """
 import sys, os
 import datetime
@@ -43,16 +46,23 @@ class QuitException(Exception):
     pass
 
 class Server:
-
+    """
+    Implement a pure-asyncio server, providing controller and model, and talking to
+    the GUI view over an inter-process pipe
+    """
     def __init__(self, pipe):
+        """
+        Instantiate the model/controller part
+        :param pipe: the parent end of an interprocess Pipe
+        """
         self.pipe = pipe
-        pass
 
     async def task_listenToGUI(self):
-        self.isRunning = True
-        self.threadPool = ThreadPoolExecutor()
-        self.loop = asyncio.get_running_loop()
-        print("Server: starting")
+        """
+        Implement a task which retrieves objects from the GUI and passes these to
+        a callback
+        :return:
+        """
         while self.isRunning:
             item = await self.readFromGUI()
             try:
@@ -94,27 +104,56 @@ class Server:
 
     async def readFromGUI(self):
         """
-        Receive an object sent by the GUI, by calling the blocking Pipe reader method in a separate thread
+        Receive an object sent by the GUI, by calling the sync Pipe reader method in a separate thread
         :return:
         """
-        item = await (self.loop.run_in_executor(self.threadPool, self.pipe.recv))
+        item = await self.runInThread(self.pipe.recv)
         return item
 
     async def writeToGUI(self, item):
         """
-        Send an object to the GUI, by calling the blocking Pipe writer method in a separate thread
+        Send an object to the GUI, by calling the sync Pipe writer method in a separate thread
         :return:
         """
-        await (self.loop.run_in_executor(self.threadPool, self.pipe.send, item))
+        return await self.runInThread(self.pipe.send, item)
+
+    async def runInThread(self, func, *args):
+        """
+        Execute a sync function in a separate thread, so as to not block the event loop
+        :param func:
+        :param args:
+        :return:
+        """
+        return await (self.loop.run_in_executor(self.threadPool, func, *args))
 
     async def arun(self):
-        self.qQuit = asyncio.Queue()
+        """
+        Set up the Server process with the needed resources, then fire it up and run
+        it to completion.
+        :return:
+        """
+        self.threadPool = ThreadPoolExecutor()
+        self.loop = asyncio.get_running_loop()
+        self.qQuit = asyncio.Queue()            # for telling Server to shut down
+        self.isRunning = True                   # flag which tells tasks when to quit
+
+        print("Server: starting")
+
+        # spawn the needed asyncio tasks for this server
         self.task_listenToGUI = asyncio.create_task(self.task_listenToGUI())
         self.task_ticker = asyncio.create_task(self.task_ticker())
+
+        # wait for a quit notification
         await self.qQuit.get()
 
     @classmethod
     def run(cls, conn):
+        """
+        Given an interprocess Pipe endpoint, instantiate the asyncio Server
+        then run it. This gets executed in this example as the parent process.
+        :param conn: a Pipe connection endpoint
+        :return:
+        """
         print("Server.run: creating server instance")
         inst = cls(conn)
         try:
@@ -194,12 +233,24 @@ class GUI:
         print("on_btnSend: done")
 
     def on_idle(self, *args):
+        """
+        Callback which fires whenever FLTK GUI is inactive. This is a suitable
+        time for retrieving instruction objects from the Server and acting on them
+        :param args: ignored, as passed by FLTK
+        :return:
+        """
+        # run until there are no more objects to retrieve from server
         while self.pipe.poll(0.1):
             item = self.pipe.recv()
             print("GUI: on_idle: got %s" % repr(item))
             self.on_msgFromServer(item)
 
     def on_msgFromServer(self, item):
+        """
+        Callback which fires when an object is received from the Server process
+        :param item: object, as sent by server
+        :return:
+        """
         if item is None:
             print("GUI: got None from server, so we need to close")
             self.close()
@@ -213,25 +264,38 @@ class GUI:
         """
         callback for when user clicks the 'Quit' button
         """
-        print("on_btnQuit: quitting")
+        print("GUI.on_btnQuit: quitting")
         self.on_close()
 
     def on_close(self, *args):
-        print("on_close: quitting")
+        """
+        Callback for when the window has been closed
+        :param args:
+        :return:
+        """
+        print("GUI.on_close: GUI window closed, quitting")
         self.close()
 
     def close(self):
-        print("close: shutting down UI, sending None to server to make it quit")
+        print("GUI.close: shutting down UI, sending None to server to make it quit")
         self.pipe.send(None)
         self.win.hide()
 
+    def run_(self):
+        print("GUI.run_: running the FLTK GUI")
+        fltk.Fl.run()
+
     @classmethod
     def run(cls, pipe):
+        """
+        Given an interprocess Pipe endpoint, instantiate the GUI then run it.
+        This gets executed in this example as the child process
+        :param conn: a Pipe connection endpoint.
+        :return:
+        """
         inst = cls(pipe)
-        print("MyGUI.run(): starting")
-        fltk.Fl.run()
-#        inst.close()
-        print("MyGUI.run(): back from fltk.Fl_run()")
+        inst.run_()
+        print("GUI.run: GUI process completed")
 
 class ProcessPair:
     """
