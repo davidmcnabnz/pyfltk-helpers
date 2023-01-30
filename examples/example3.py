@@ -4,6 +4,11 @@ example3.py
 
 Splits into 2 processes, with FLTK GUI in one, and an asyncio process in the other,
 and the two processes interacting over inter-process Pipe
+
+This overcomes the issue of FLTK hogging the GIL and blocking asyncio event loops.
+By running the GUI and the asyncio-based server in separate processes, talking over the Pipe,
+FLTK no longer interferes with any event loops. The GUI passes user events to the server, and
+the server passes events to the GUI.
 """
 import sys, os
 import datetime
@@ -53,17 +58,24 @@ class MyServer:
         print("MyServer: starting")
         while self.isRunning:
             item = await self.readFromGUI()
+            if item is None:
+                self.isRunning = False
+                print("MyServer: got None from GUI, so quitting")
+                await self.qQuit.put(None)
+                self.task_ticker.cancel()
+                break
+            elif item['input'] == 'quit':
+                # this demonstrates the server telling the GUI to quit
+                print("Got 'quit' from GUI, telling GUI to close")
+                await self.writeToGUI(None)
+                await self.qQuit.put(None)
+                return
+
             print("MyServer: got %s" % str(item))
             reply = {'type': 'ack', 'data': item}
             print("MyServer: replying with %s" % str(reply))
             await self.writeToGUI(reply)
             print("MyServer: reply sent")
-            if item is None:
-                self.isRunning = False
-                print("MyServer: quitting")
-                await self.qQuit.put(None)
-                self.task_ticker.cancel()
-                break
 
     async def task_ticker(self):
         while self.isRunning:
@@ -126,11 +138,11 @@ class MyGUI:
 
         fltk.Fl.add_idle(self.on_idle)
 
-        self.win.resizable(self.win)
+        self.win.resizable()
 
         self.win.show()
         self.win.end()
-        #self.win.callback(self.on_close)
+        self.win.callback(self.on_close)
 
     def on_btnSend(self, *args):
         """
@@ -149,11 +161,12 @@ class MyGUI:
     def on_idle(self, *args):
         while self.pipe.poll(0.1):
             item = self.pipe.recv()
+            print("GUI: on_idle: got %s" % repr(item))
             self.on_msgFromServer(item)
 
     def on_msgFromServer(self, item):
         if item is None:
-            self.win.hide()
+            print("GUI: got None from server, so we need to close")
             self.close()
         else:
             fmt = pprint.pformat(item, indent=2, width=30)
@@ -165,17 +178,24 @@ class MyGUI:
         """
         callback for when user clicks the 'Quit' button
         """
-        self.win.hide()
+        print("on_btnQuit: quitting")
+        self.on_close()
+
+    def on_close(self, *args):
+        print("on_close: quitting")
+        self.close()
 
     def close(self):
+        print("close: shutting down UI, sending None to server to make it quit")
         self.pipe.send(None)
+        self.win.hide()
 
     @classmethod
     def run(cls, pipe):
         inst = cls(pipe)
         print("MyGUI.run(): starting")
         fltk.Fl.run()
-        inst.close()
+#        inst.close()
         print("MyGUI.run(): back from fltk.Fl_run()")
 
 def main():
