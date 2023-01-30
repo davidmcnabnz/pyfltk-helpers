@@ -50,12 +50,13 @@ class Server:
     Implement a pure-asyncio server, providing controller and model, and talking to
     the GUI view over an inter-process pipe
     """
-    def __init__(self, pipe):
+    def __init__(self, pipe, *args):
         """
         Instantiate the model/controller part
         :param pipe: the parent end of an interprocess Pipe
         """
         self.pipe = pipe
+        self.args = args
 
     async def task_listenToGUI(self):
         """
@@ -147,7 +148,7 @@ class Server:
         await self.qQuit.get()
 
     @classmethod
-    def run(cls, conn):
+    def run(cls, conn, *args):
         """
         Given an interprocess Pipe endpoint, instantiate the asyncio Server
         then run it. This gets executed in this example as the parent process.
@@ -155,7 +156,7 @@ class Server:
         :return:
         """
         print("Server.run: creating server instance")
-        inst = cls(conn)
+        inst = cls(conn, *args)
         try:
             asyncio.run(inst.arun())
             print("Server.run: server terminated normally")
@@ -170,13 +171,14 @@ class GUI:
     and receives display update commands from the Server, via
     an inter-process Pipe connected between them.
     """
-    def __init__(self, pipe):
+    def __init__(self, pipe, *args, **kw):
         """
         Set up this GUI
         :param pipe: an inter-process Pipe
         """
         self.pipe = pipe
-        self.createGUI()
+        self.args = args
+        self.kw = kw
 
     def createGUI(self):
         """
@@ -282,6 +284,8 @@ class GUI:
         self.win.hide()
 
     def run_(self):
+        print("GUI.run_: creating the FLTK GUI")
+        self.createGUI()
         print("GUI.run_: running the FLTK GUI")
         fltk.Fl.run()
 
@@ -313,9 +317,11 @@ class ProcessPair:
         self.parentRunner = parentRunner
         self.childRunner = childRunner
 
-    def run(self):
+    def run(self, parentArgs=None, childArgs=None):
         """
         Launch both the parent and child runners, and connect a Pipe between them
+        :param parentArgs: a list of optional arguments to pass to the parent's runner
+        :param childArgs: a list of optional arguments to pass to the child runner
         :return:
         """
         # create inter-process pipe
@@ -323,17 +329,24 @@ class ProcessPair:
 
         # spawn the GUI to run in a separate process and communicate over the pipe
         print("ProcessPair.run: create and launch child process")
-        p = Process(target=self.childRunner, args=(child_conn,))
+        if childArgs is None:
+            childArgs = []
+        childArgs = [child_conn] + childArgs
+        p = Process(target=self.childRunner, args=childArgs)
         p.start()
 
         print("ProcessPair.run: create and run parent in current process")
-        self.parentRunner(parent_conn)
+        if parentArgs is None:
+            parentArgs = []
+        self.parentRunner(parent_conn, *parentArgs)
         print("ProcessPair.run: parent terminated")
 
 
 def main():
+    serverArgs = []
+    childArgs = []
     procPair = ProcessPair(Server.run, GUI.run)
-    procPair.run()
+    procPair.run(serverArgs, childArgs)
 
 if __name__ == '__main__':
     main()
